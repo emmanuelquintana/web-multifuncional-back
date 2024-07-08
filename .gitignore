@@ -1,0 +1,23 @@
+# Python
+*.pyc
+__pycache__/
+
+# Virtualenv
+venv/
+ENV/
+
+# Logs y archivos temporales
+*.log
+*.pot
+*.pyo
+*.bak
+*.swp
+*~
+
+# Archivos de configuración local (no versionar)
+instance/
+config.py
+
+# Archivos específicos de sistema operativo
+.DS_Store
+Thumbs.db
