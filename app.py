@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify, send_from_directory
 from werkzeug.utils import secure_filename
 import os
+from flask_cors import CORS
 import fitz
 from docx import Document
 from docx.shared import Cm
@@ -9,8 +10,12 @@ from datetime import datetime
 from docx2pdf import convert
 import math
 import shutil
+import threading
+import time
+import json
 
 app = Flask(__name__)
+CORS(app)
 
 # Configurar la carpeta de subida
 UPLOAD_FOLDER = 'uploads'
@@ -24,6 +29,7 @@ if not os.path.exists(DOWNLOAD_FOLDER):
     os.makedirs(DOWNLOAD_FOLDER)
 app.config['DOWNLOAD_FOLDER'] = DOWNLOAD_FOLDER
 
+
 # Configurar el registro (logs)
 import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -31,6 +37,7 @@ logger = logging.getLogger(__name__)
 
 # Función para convertir PDF a imágenes JPG
 def pdf_to_jpg(pdf_path, output_folder, min_width, min_height, day):
+    
     pdf_document = fitz.open(pdf_path)
     total_pages = len(pdf_document)
     pedidos = total_pages // 2
@@ -125,7 +132,51 @@ def eliminar_hojas_pares(nombre_archivo_pdf):
     #quitar _sin_pares del titulo del documento
     os.rename(nombre_archivo_pdf_sin_pares, nombre_archivo_pdf)
     
-   
+ # Función para renombrar y organizar la carpeta de subidas
+def rename_and_organize_uploads():
+    fecha_actual = datetime.now().strftime("%d-%m-%Y")
+    for file in os.listdir(app.config['UPLOAD_FOLDER']):
+        if file.endswith('.pdf'):
+            old_path = os.path.join(app.config['UPLOAD_FOLDER'], file)
+            new_filename = f"guias-{fecha_actual}-{file}"
+            new_path = os.path.join(app.config['UPLOAD_FOLDER'], new_filename)
+            os.rename(old_path, new_path)
+            logger.info(f"Archivo renombrado a {new_filename}")
+
+# Función para vaciar carpetas una vez a la semana
+def clear_folders_weekly():
+    while True:
+        time.sleep(7 * 24 * 60 * 60)  # Esperar una semana
+        clear_folders()
+        logger.info("Carpetas 'uploads', 'download' y carpetas de imágenes vaciadas.")
+
+# Función para vaciar las carpetas
+def clear_folders():
+    for folder in [app.config['UPLOAD_FOLDER'], app.config['DOWNLOAD_FOLDER']]:
+        for file in os.listdir(folder):
+            file_path = os.path.join(folder, file)
+            try:
+                if os.path.isfile(file_path) or os.path.islink(file_path):
+                    os.unlink(file_path)
+                elif os.path.isdir(file_path):
+                    shutil.rmtree(file_path)
+            except Exception as e:
+                logger.error(f'Error al borrar el archivo {file_path}. Razón: {e}')
+
+    # Eliminar carpetas de imágenes generadas
+    current_dir = os.getcwd()
+    for folder in os.listdir(current_dir):
+        folder_path = os.path.join(current_dir, folder)
+        if os.path.isdir(folder_path) and folder.startswith("GUIAS SHEIN") and folder.endswith("- IMAGENES"):
+            try:
+                shutil.rmtree(folder_path)
+                logger.info(f'Carpeta {folder_path} eliminada.')
+            except Exception as e:
+                logger.error(f'Error al borrar la carpeta {folder_path}. Razón: {e}')
+
+# Iniciar el hilo para vaciar las carpetas semanalmente
+threading.Thread(target=clear_folders_weekly, daemon=True).start()
+
 
 # Función para procesar un solo día
 @app.route('/api/process_single_day', methods=['POST'])
@@ -158,6 +209,8 @@ def process_single_day():
           # Llamada a la función organizar_documentos()
         organizar_documentos()
 
+        rename_and_organize_uploads()
+
         rel_path_doc_encoded = rel_path_doc.replace(' ', '%20')
         rel_path_pdf_encoded = rel_path_pdf.replace(' ', '%20')
 
@@ -165,18 +218,22 @@ def process_single_day():
         pdf_download_link = f"/api/download/{rel_path_pdf_encoded}"
 
 
-        return jsonify({
+        response = {
             'message': f'Procesado exitosamente para {datetime.now().strftime("%d-%m-%Y")}',
             'total_pages': total_pages,
             'total_pedidos': total_pedidos,
             'processed_pedidos': processed_pedidos,
-          'name_doc': rel_path_doc,
+            'name_doc': rel_path_doc,
             'name_pdf': rel_path_pdf,
             'links': {
                 'download_doc': doc_download_link,
                 'download_pdf': pdf_download_link
             }
-        }), 200
+        }
+
+        logger.info(f"Respuesta JSON: {response}")
+
+        return jsonify(response), 200
 
     return jsonify({'error': 'Formato de archivo no válido, se esperaba PDF'}), 400
 
@@ -242,10 +299,16 @@ def process_weekend():
                 'download_pdf': pdf_download_link
             }
         })
-    return jsonify({
+
+    rename_and_organize_uploads()
+    response = {
         'message': 'Procesado exitosamente para el fin de semana',
         'processed_days': processed_days
-    }), 200
+    }
+
+    logger.info(f"Respuesta JSON: {json.dumps(response, indent=2)}")
+
+    return jsonify(response), 200
 
 # Función auxiliar para obtener el día desde el nombre del archivo
 def get_day_from_filename(filename):
@@ -273,6 +336,13 @@ def download_file(filename):
         return send_from_directory(directory=directory, path=filename, as_attachment=True)
     else:
         return jsonify({'error': f'Archivo {filename} no encontrado'}), 404
+
+# Endpoint para vaciar las carpetas
+@app.route('/api/clear_folders', methods=['POST'])
+def clear_folders_endpoint():
+    clear_folders()
+    logger.info("Carpetas 'uploads' y 'download' vaciadas a través del endpoint.")
+    return jsonify({'message': 'Carpetas vaciadas exitosamente'}), 200
 
 if __name__ == '__main__':
     app.run(debug=True)
