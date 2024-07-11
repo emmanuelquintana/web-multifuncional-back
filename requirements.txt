@@ -48,7 +48,3 @@ typing_extensions==4.12.2
 tzdata==2024.1
 urllib3==2.2.2
 Werkzeug==3.0.3
-
-# Incluir pywin32 solo en Windows
-; platform_system == 'Windows'
--r requirements-win.txt
