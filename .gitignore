@@ -21,3 +21,9 @@ config.py
 # Archivos específicos de sistema operativo
 .DS_Store
 Thumbs.db
+
+# archivos de pdf e imagenes
+.png
+.jpg
+.pdf
+.docx
