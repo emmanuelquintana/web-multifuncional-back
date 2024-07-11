@@ -36,7 +36,6 @@ pyparsing==3.1.2
 python-dateutil==2.9.0.post0
 python-docx==1.1.2
 pytz==2024.1
-pywin32==306
 pyxnat==1.6.2
 rdflib==6.3.2
 requests==2.32.3
@@ -49,3 +48,7 @@ typing_extensions==4.12.2
 tzdata==2024.1
 urllib3==2.2.2
 Werkzeug==3.0.3
+
+# Incluir pywin32 solo en Windows
+; platform_system == 'Windows'
+-r requirements-win.txt
