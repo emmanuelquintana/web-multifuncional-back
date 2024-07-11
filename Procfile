@@ -1,1 +1,1 @@
-web: python app.py
+web: python patch_fitz.py && python app.py
