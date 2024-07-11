@@ -23,7 +23,7 @@ config.py
 Thumbs.db
 
 # archivos de pdf e imagenes
-.png
-.jpg
-.pdf
-.docx
+*.png
+*.jpg
+*.pdf
+*.docx
